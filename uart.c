@@ -1,7 +1,7 @@
 
 #include "uart.h"
 
-#define BAUDRATE 19200                                         //The baudrate that we want to use
+#define BAUDRATE 9600                //The baudrate that we want to use
 #define BAUD_PRESCALLER (((F_CPU / (BAUDRATE * 16UL))) - 1)     //The formula that does all the required maths
 
 FILE uart_stream = FDEV_SETUP_STREAM (
@@ -11,19 +11,19 @@ FILE uart_stream = FDEV_SETUP_STREAM (
 
 void uart_init(void) {
 
-	UBRR0H = (uint8_t)(BAUD_PRESCALLER>>8);
-	UBRR0L = (uint8_t)(BAUD_PRESCALLER);
-	UCSR0B = (1<<RXEN0)|(1<<TXEN0);
-	UCSR0C = ((1<<UCSZ00)|(1<<UCSZ01));
+	UBRRH = (uint8_t)(BAUD_PRESCALLER>>8);
+	UBRRL = (uint8_t)(BAUD_PRESCALLER);
+	UCSRB = (0<<RXEN)|(1<<TXEN); //!!!!!
+	UCSRC = (1<<UCSZ0)|(1<<UCSZ1);
 }
 
 int uart_putchar(char c, FILE *stream) {
-	while(!(UCSR0A & (1<<UDRE0)));
-	UDR0 = c;
+	while(!(UCSRA & (1<<UDRE)));
+	UDR = c;
 	return 0;
 }
 
 int uart_getchar(FILE *sttream) {
-	while(!(UCSR0A & (1<<RXC0)));
-	return UDR0;
+	while(!(UCSRA & (1<<RXC)));
+	return UDR;
 }

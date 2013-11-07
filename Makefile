@@ -10,7 +10,7 @@ LDFLAGS = -Wl,-Map,$(TARGET).map,--gc-sections -mmcu=$(MCU)
 all: $(TARGET).elf
 
 
-$(TARGET).elf: $(TARGET).o uart.o
+$(TARGET).elf: $(TARGET).o uart.o timer1pwm.o
 	$(CC) $^ -o $@ $(LDFLAGS) #$(CCFLAGS)
 	avr-objcopy -j .text -j .data -O ihex $(TARGET).elf $(TARGET).hex
 	avr-size --mcu=$(MCU) $(TARGET).elf
@@ -23,5 +23,5 @@ clean:
 	rm -f *.o *.elf *.hex *.map *.lst
 
 load: all
-	avreal -aft2232:enable=~adbus4 +ATmega328p -evw -c $(TARGET).hex
+	avreal -aft2232:enable=~adbus4 +ATmega8 -evw -c $(TARGET).hex
 #	avreal +ATmega8 -aft2232 -evw -c $(TARGET).hex
