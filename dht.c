@@ -35,35 +35,35 @@ static int DHT_read(dht_t *self)
 	unsigned int loopCnt = TIMEOUT;
 	
 	// after 50us the line should be low if everything is ok. 
-	if(!self->sproc(DHT_READ_PIN, 0) == LOW)
+	if(self->sproc(DHT_READ_PIN, 0))
 		goto timeout;
 		
-	self->sproc(DHT_DELAY_US, 80); 
+	self->sproc(DHT_DELAY_US, 60); 
 	
 	// now the pin *should* be high
-	if(!self->sproc(DHT_READ_PIN, 0) == HIGH)
+	if(!self->sproc(DHT_READ_PIN, 0))
 		return DHTLIB_ERROR_TIMEOUT; 
 		
 	// now we wait until it pulls the line low again
-	while(self->sproc(DHT_READ_PIN, 0) == HIGH)
+	while(self->sproc(DHT_READ_PIN, 0))
 		if (loopCnt-- == 0) goto timeout;
 
 	// READ THE OUTPUT - 40 BITS => 5 BYTES
 	for (int i=0; i<40; i++)
 	{
 		loopCnt = TIMEOUT;
-		while(self->sproc(DHT_READ_PIN, 0) == LOW)
+		while(!self->sproc(DHT_READ_PIN, 0))
 						if (loopCnt-- == 0) goto timeout;
 		
 		self->sproc(DHT_DELAY_US, 40); 
 		
 		loopCnt = TIMEOUT;
 		// if the line is high after > 30 us then it's a one
-		if(self->sproc(DHT_READ_PIN, 0) == HIGH)
+		if(self->sproc(DHT_READ_PIN, 0))
 			self->_bits[idx] |= (1 << cnt);
 		
 		// wait until the next low
-		while(self->sproc(DHT_READ_PIN, 0) == HIGH)
+		while(self->sproc(DHT_READ_PIN, 0))
 						if (loopCnt-- == 0) goto timeout;
 
 		if (cnt == 0){ // next byte?
