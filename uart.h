@@ -4,7 +4,7 @@
 #include <avr/io.h>
 #include <stdio.h>
 
-#define USART_BAUDRATE 9600
+#define USART_BAUDRATE 19200
 #define BAUD_PRESCALE (((F_CPU / (USART_BAUDRATE * 16UL))) - 1)
 
 void uart_init(void);

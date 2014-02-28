@@ -5,18 +5,25 @@
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
 #include "uart.h"
+#include "dht.h"
 
-//#include "uart.h"
+#define DHTpin 3
+#define DHTpower 4
 
 #define SETBIT(reg,bit) (reg|=1<<bit)
 #define CLRBIT(reg,bit) (reg&=~(1<<bit))
+#define TSTBIT(reg,bit) (reg&(1<<bit))
 
 
 
 void gpio_init() {
-//	DDRD |= 1<<PD1;
-	DDRD |= 1<<PD0;
-//	DDRD = 0xff;
+		DDRB |= 1<<PB5;
+		DDRD |= 1<<DHTpower;
+		PORTD|= 1<<DHTpower;
+		//SETBIT(PORTD,DHTpin);
+		//CLRBIT(DDRD,DHTpin);
+		CLRBIT(PORTD,DHTpin);
+		SETBIT(DDRD,5);
 }
 
 void interrupt_init() {
@@ -33,23 +40,70 @@ void go_sleep () {
 	cli();
 }
 
-int main (void) {
+#define DHT_PIN(reg) BIT(C, 0, reg)
 
+static inline int16_t dhtproc(dht_request_t req, uint16_t arg){
+	switch(req){
+		case DHT_READ_PIN:
+		{
+			CLRBIT(DDRD,3);
+	//		SETBIT(PORTD,5);
+			int val = bit_is_set(PIND,3);
+	//		_delay_us(1);
+	//		CLRBIT(PORTD,5);
+
+			return val;
+		}
+			break;
+		case DHT_WRITE_PIN:
+			if (arg) {
+				//SETBIT(PORTD,DHTpin);
+				CLRBIT(DDRD,DHTpin);
+			}	else {
+				SETBIT(DDRD,DHTpin);
+			}
+			return 0;
+			break;
+		case DHT_DELAY_MS:
+			while(arg--) {
+				_delay_ms(1);
+			}
+			break;
+		case DHT_DELAY_US:
+			while(arg--) {
+				_delay_us(1);
+			}
+			break;
+		default:
+			return -1;
+	}
+	return 0;
+}
+
+
+
+
+int main (void) {
+	dht_t dht;
 	gpio_init();
 	stdout = &uart_stream;
 	stdin = &uart_stream;
 	uart_init();
-	timer1_pwm_init();	
-//	timer1_pwm_set_percent(50);
-//	printf("Hi, how are you?\n\r");
+	printf("Hi, how are you?\n\r");
+	DHT_Init(&dht, dhtproc);
+	while(1){
+		_delay_ms(3000);
+		PORTB^=(1<<5);
+		if(DHT_Read22(&dht) == DHTLIB_OK){
+			printf("data: T:%d, H:%d\r\n", (int)dht.temperature, (int)dht.humidity);
+		} else {
+			printf("-\r\n");
+		}
+	}
+
+
 //	interrupt_init();
 //	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	
-	while (1) {
-		PORTD^=1;
-		printf("Hi, how are you?\n\r");
-		_delay_ms(100);
-	}
 	
 	return 0;
 }
