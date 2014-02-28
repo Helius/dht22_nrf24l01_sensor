@@ -1,0 +1,167 @@
+#include "dht.h"
+#include <avr/interrupt.h>
+#include <stdio.h>
+
+#define TIMEOUT 10000
+#define SETBIT(reg,bit) (reg|=1<<bit)
+#define CLRBIT(reg,bit) (reg&=~(1<<bit))
+#define TSTBIT(reg,bit) (reg&(1<<bit))
+
+int DHT_Init(dht_t *self, dht_service_proc_t sp){
+	self->sproc = sp;
+	self->temperature = 0;
+	self->humidity = 0;
+	return DHTLIB_OK;
+}
+
+// return values:
+// DHTLIB_OK
+// DHTLIB_ERROR_TIMEOUT
+static int DHT_read(dht_t *self)
+{
+	// INIT BUFFERVAR TO RECEIVE DATA
+	uint8_t cnt = 7;
+	uint8_t idx = 0;
+
+	// EMPTY BUFFER
+	for (int i=0; i< 5; i++) self->_bits[i] = 0;
+
+	// REQUEST SAMPLE
+	int sreg = SREG;
+	cli();
+
+	self->sproc(DHT_WRITE_PIN, LOW);
+	self->sproc(DHT_DELAY_MS, 10);
+	self->sproc(DHT_WRITE_PIN, HIGH);
+	self->sproc(DHT_DELAY_US, 50);
+
+	// GET ACKNOWLEDGE or TIMEOUT
+	unsigned int loopCnt = TIMEOUT;
+
+	// after 50us the line should be low if everything is ok. 
+	if(!self->sproc(DHT_READ_PIN, 0) == LOW) {
+		printf ("e1\n\r");
+		goto timeout;
+	}
+
+	self->sproc(DHT_DELAY_US, 50); 
+
+	// now the pin *should* be high
+	if(!self->sproc(DHT_READ_PIN, 0) == HIGH) {
+		printf ("e2\n\r");
+		return DHTLIB_ERROR_TIMEOUT; 
+	}
+	// now we wait until it pulls the line low again
+	while(self->sproc(DHT_READ_PIN, 0) != LOW) {
+		self->sproc(DHT_DELAY_US, 5);
+		if (loopCnt-- == 0) {
+			printf ("e3\n\r");
+			goto timeout;
+		}
+	}
+
+	// READ THE OUTPUT - 40 BITS => 5 BYTES
+	for (int i=0; i<40; i++)
+	{
+		loopCnt = TIMEOUT;
+		while(self->sproc(DHT_READ_PIN, 0) == LOW)
+			if (loopCnt-- == 0) {
+				printf ("e4\n\r");
+				goto timeout;
+			}
+
+		self->sproc(DHT_DELAY_US, 35); 
+
+		loopCnt = TIMEOUT;
+		// if the line is high after > 30 us then it's a one
+			SETBIT(PORTD,5);
+			self->sproc(DHT_DELAY_US, 1);
+		if(self->sproc(DHT_READ_PIN, 0)) {
+			self->_bits[idx] |= (1 << cnt);
+		}
+			CLRBIT(PORTD,5);
+
+		// wait until the next low
+		while(self->sproc(DHT_READ_PIN, 0))
+			if (loopCnt-- == 0) {
+				printf ("e5\n\r");
+				goto timeout;
+			}
+
+		if (cnt == 0){ // next byte?
+			cnt = 7;  
+			idx++;      
+		}
+		else cnt--;
+	}
+	SREG = sreg;
+	return DHTLIB_OK;
+timeout: 
+	SREG = sreg;
+	return DHTLIB_ERROR_TIMEOUT;
+}
+
+// return values:
+// DHTLIB_OK
+// DHTLIB_ERROR_CHECKSUM
+// DHTLIB_ERROR_TIMEOUT
+int DHT_Read11(dht_t *self)
+{
+	// READ VALUES
+	int rv = DHT_read(self);
+	if (rv != DHTLIB_OK)
+	{
+		self->humidity    = DHTLIB_INVALID_VALUE; // or is NaN prefered?
+		self->temperature = DHTLIB_INVALID_VALUE;
+		return rv;
+	}
+
+	// CONVERT AND STORE
+	self->humidity    = self->_bits[0];  // bit[1] == 0;
+	self->temperature = self->_bits[2];  // bits[3] == 0;
+
+	// TEST CHECKSUM
+	uint8_t sum = self->_bits[0] + self->_bits[2]; // bits[1] && bits[3] both 0
+	if (self->_bits[4] != sum) {
+		printf ("e8\n\r");
+		return DHTLIB_ERROR_CHECKSUM;
+	}
+
+	return DHTLIB_OK;
+}
+
+// return values:
+// DHTLIB_OK
+// DHTLIB_ERROR_CHECKSUM
+// DHTLIB_ERROR_TIMEOUT
+int DHT_Read22(dht_t *self)
+{
+	// READ VALUES
+	int rv = DHT_read(self);
+	if (rv != DHTLIB_OK)
+	{
+		self->humidity    = DHTLIB_INVALID_VALUE;  // invalid value, or is NaN prefered?
+		self->temperature = DHTLIB_INVALID_VALUE;  // invalid value
+		return rv;
+	}
+
+	// CONVERT AND STORE
+	self->humidity    = WORD(self->_bits[0], self->_bits[1]) * 0.1;
+
+	if (self->_bits[2] & 0x80) // negative temperature
+	{
+		self->temperature = WORD(self->_bits[2]&0x7F, self->_bits[3]) * 0.1;
+		self->temperature *= -1.0;
+	}
+	else
+	{
+		self->temperature = WORD(self->_bits[2], self->_bits[3]) * 0.1;
+	}
+
+	// TEST CHECKSUM
+	uint8_t sum = self->_bits[0] + self->_bits[1] + self->_bits[2] + self->_bits[3];
+	if (self->_bits[4] != sum) return DHTLIB_ERROR_CHECKSUM;
+
+	return DHTLIB_OK;
+}
+
