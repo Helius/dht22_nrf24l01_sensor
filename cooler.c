@@ -136,10 +136,10 @@ int main (void) {
 		
 		data_array[0] = 0x01;         // kind: DHT22 = 1
 		data_array[1] = 0x02;         // UID
-		data_array[2] = dht._bits[0];
-		data_array[3] = dht._bits[1];
-		data_array[4] = dht._bits[2];
-		data_array[5] = dht._bits[3];
+		data_array[2] = dht._bits[0]; // humidity_0
+		data_array[3] = dht._bits[1]; // humidiry_1
+		data_array[4] = dht._bits[2]; // tempr_0
+		data_array[5] = dht._bits[3]; // tempr_1
 		data_array[6] = Vbat;
 		data_array[7] = temp;
 
