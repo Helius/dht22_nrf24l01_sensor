@@ -10,7 +10,7 @@ LDFLAGS = -Wl,-Map,$(TARGET).map,--gc-sections -mmcu=$(MCU)
 all: $(TARGET).elf
 
 
-$(TARGET).elf: $(TARGET).o uart.o dht.o
+$(TARGET).elf: $(TARGET).o uart.o dht.o nrf24L01_plus/nrf24.o radioPinFunctions.o
 	$(CC) $^ -o $@ $(LDFLAGS) #$(CCFLAGS)
 	avr-objcopy -j .text -j .data -O ihex $(TARGET).elf $(TARGET).hex
 	avr-size --mcu=$(MCU) $(TARGET).elf

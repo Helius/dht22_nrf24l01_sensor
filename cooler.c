@@ -6,6 +6,7 @@
 #include <avr/interrupt.h>
 #include "uart.h"
 #include "dht.h"
+#include "nrf24L01_plus/nrf24.h"
 
 #define DHTpin 3
 #define DHTpower 4
@@ -47,17 +48,13 @@ static inline int16_t dhtproc(dht_request_t req, uint16_t arg){
 		case DHT_READ_PIN:
 		{
 			CLRBIT(DDRD,3);
-	//		SETBIT(PORTD,5);
 			int val = bit_is_set(PIND,3);
-	//		_delay_us(1);
-	//		CLRBIT(PORTD,5);
 
 			return val;
 		}
 			break;
 		case DHT_WRITE_PIN:
 			if (arg) {
-				//SETBIT(PORTD,DHTpin);
 				CLRBIT(DDRD,DHTpin);
 			}	else {
 				SETBIT(DDRD,DHTpin);
@@ -80,6 +77,12 @@ static inline int16_t dhtproc(dht_request_t req, uint16_t arg){
 	return 0;
 }
 
+uint8_t temp;
+uint8_t q = 0;
+uint8_t data_array[4];
+uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
+uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
+uint8_t Vbat = 0;
 
 
 
@@ -91,14 +94,53 @@ int main (void) {
 	uart_init();
 	printf("Hi, how are you?\n\r");
 	DHT_Init(&dht, dhtproc);
+
+	/* init hardware pins */
+	nrf24_init();
+	/* Channel #2 , payload length: 4 */
+	nrf24_config(2,4);
+	/* Set the device addresses */
+	nrf24_tx_address(tx_address);
+	nrf24_rx_address(rx_address);    
+
 	while(1){
-		_delay_ms(3000);
-		PORTB^=(1<<5);
 		if(DHT_Read22(&dht) == DHTLIB_OK){
-			printf("data: T:%d, H:%d\r\n", (int)dht.temperature, (int)dht.humidity);
+			//printf("data: T:%d, H:%d\r\n", (int)dht.temperature, (int)dht.humidity);
 		} else {
-			printf("-\r\n");
+			//printf("-\r\n");
 		}
+		data_array[0] = dht.temperature;
+		data_array[1] = dht.humidity;
+		data_array[2] = Vbat;
+		data_array[3] = q++;
+
+		/* Automatically goes to TX mode */
+		nrf24_send(data_array);
+
+		/* Wait for transmission to end */
+		while(nrf24_isSending());
+
+		/* Make analysis on last tranmission attempt */
+		temp = nrf24_lastMessageStatus();
+
+		if(temp == NRF24_TRANSMISSON_OK)
+		{
+			printf("> Tranmission went OK\r\n");
+		}
+		else if(temp == NRF24_MESSAGE_LOST)
+		{
+			printf("> Message is lost ...\r\n");
+		}
+
+		/* Retranmission count indicates the tranmission quality */
+		temp = nrf24_retransmissionCount();
+		printf("> Retranmission count: %d\r\n",temp);
+		SETBIT(PORTB,PB5);
+		_delay_ms(100);
+		if (temp==0) {
+			CLRBIT(PORTB,PB5);
+		}
+		_delay_ms(3000);
 	}
 
 
