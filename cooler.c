@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <util/delay.h>
 #include <avr/sleep.h>
+#include <avr/wdt.h>
 #include <avr/interrupt.h>
 #include "uart.h"
 #include "dht.h"
@@ -27,18 +28,33 @@ void gpio_init() {
 		SETBIT(DDRD,5);
 }
 
-void interrupt_init() {
-	/*EIMSK |= (1 << INT0);     // Turns on INT0
-	SETBIT(PORTD,WAKEUP);     // enable pull-up
-	CLRBIT(DDRD,WAKEUP);      // set as input*/
-}
 
 void go_sleep () {
+	nrf24_powerDown();
+	prepare_sleep();
+	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 	sleep_enable();
 	sei();
 	sleep_cpu();
 	sleep_disable();
 	cli();
+}
+
+void prepare_sleep() {
+	// disable ADC
+	ADCSRA = 0;  
+	// turn off various modules
+	PRR = 0xFF; 
+	// turn off brown-out enable in software
+	MCUCR = (1<<BODS)|(1<<BODSE);
+	MCUCR = 1<<BODS; 
+	// clear various "reset" flags
+	MCUSR = 0;     
+	// allow changes, disable reset
+	WDTCSR = (1<<WDCE) | (1<<WDE);
+	// set interrupt mode and an interval 
+	WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0);    // set WDIE, and 8 seconds delay
+	wdt_reset();  // pat the dog
 }
 
 #define DHT_PIN(reg) BIT(C, 0, reg)
@@ -83,16 +99,24 @@ uint8_t data_array[4];
 uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 uint8_t Vbat = 0;
-
-
+uint8_t wakeupCnt __attribute__ ((section (".noinit")));
 
 int main (void) {
+/*	
+	if (wakeupCnt++ < 3) {
+		go_sleep();
+	}
+	wakeupCnt = 0;
+*/
+	SETBIT(PORTB,PB5);
 	dht_t dht;
 	gpio_init();
 	stdout = &uart_stream;
 	stdin = &uart_stream;
 	uart_init();
-	printf("Hi, how are you?\n\r");
+
+//	printf("Hi, how are you %d?\n\r", wakeupCnt);
+
 	DHT_Init(&dht, dhtproc);
 
 	/* init hardware pins */
@@ -112,7 +136,7 @@ int main (void) {
 		data_array[0] = dht.temperature;
 		data_array[1] = dht.humidity;
 		data_array[2] = Vbat;
-		data_array[3] = q++;
+		data_array[3] = temp;
 
 		/* Automatically goes to TX mode */
 		nrf24_send(data_array);
@@ -123,29 +147,25 @@ int main (void) {
 		/* Make analysis on last tranmission attempt */
 		temp = nrf24_lastMessageStatus();
 
-		if(temp == NRF24_TRANSMISSON_OK)
-		{
-			printf("> Tranmission went OK\r\n");
+		if(temp == NRF24_TRANSMISSON_OK) {
+			//printf("> Tranmission went OK\r\n");
 		}
 		else if(temp == NRF24_MESSAGE_LOST)
 		{
-			printf("> Message is lost ...\r\n");
+			//printf("> Message is lost ...\r\n");
 		}
+		CLRBIT(PORTB,PB5);
 
 		/* Retranmission count indicates the tranmission quality */
 		temp = nrf24_retransmissionCount();
-		printf("> Retranmission count: %d\r\n",temp);
-		SETBIT(PORTB,PB5);
+		//printf("> Retranmission count: %d\r\n",temp);
 		_delay_ms(100);
-		if (temp==0) {
+		if (temp > 0) {
+			SETBIT(PORTB,PB5);
+			_delay_ms(3000);
 			CLRBIT(PORTB,PB5);
 		}
-		_delay_ms(3000);
+		go_sleep();
 	}
-
-
-//	interrupt_init();
-//	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	
 	return 0;
 }

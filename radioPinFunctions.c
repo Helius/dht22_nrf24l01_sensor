@@ -20,7 +20,7 @@ void nrf24_setupPins()
 {
     set_bit(DDRD,5); // CE output
     set_bit(DDRD,6); // CSN output
-    set_bit(DDRB,5); // SCK output
+    set_bit(DDRB,2); // SCK output
     set_bit(DDRB,3); // MOSI output
     clr_bit(DDRB,4); // MISO input
 }
@@ -53,11 +53,11 @@ void nrf24_sck_digitalWrite(uint8_t state)
 {
     if(state)
     {
-        set_bit(PORTB,5);
+        set_bit(PORTB,2);
     }
     else
     {
-        clr_bit(PORTB,5);
+        clr_bit(PORTB,2);
     }
 }
 /* ------------------------------------------------------------------------- */
