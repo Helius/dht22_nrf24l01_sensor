@@ -95,7 +95,7 @@ static inline int16_t dhtproc(dht_request_t req, uint16_t arg){
 
 uint8_t temp;
 uint8_t q = 0;
-uint8_t data_array[4];
+uint8_t data_array[8];
 uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 uint8_t Vbat = 0;
@@ -122,21 +122,26 @@ int main (void) {
 	/* init hardware pins */
 	nrf24_init();
 	/* Channel #2 , payload length: 4 */
-	nrf24_config(2,4);
+	nrf24_config(2,8);
 	/* Set the device addresses */
 	nrf24_tx_address(tx_address);
 	nrf24_rx_address(rx_address);    
 
 	while(1){
 		if(DHT_Read22(&dht) == DHTLIB_OK){
-			//printf("data: T:%d, H:%d\r\n", (int)dht.temperature, (int)dht.humidity);
+			printf("data: T:%f, H:%f\r\n", dht.temperature, dht.humidity);
 		} else {
 			//printf("-\r\n");
 		}
-		data_array[0] = dht.temperature;
-		data_array[1] = dht.humidity;
-		data_array[2] = Vbat;
-		data_array[3] = temp;
+		
+		data_array[0] = 0x01;         // kind: DHT22 = 1
+		data_array[1] = 0x02;         // UID
+		data_array[2] = dht._bits[0];
+		data_array[3] = dht._bits[1];
+		data_array[4] = dht._bits[2];
+		data_array[5] = dht._bits[3];
+		data_array[6] = Vbat;
+		data_array[7] = temp;
 
 		/* Automatically goes to TX mode */
 		nrf24_send(data_array);
