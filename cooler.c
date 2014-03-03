@@ -28,18 +28,6 @@ void gpio_init() {
 		SETBIT(DDRD,5);
 }
 
-
-void go_sleep () {
-	nrf24_powerDown();
-	prepare_sleep();
-	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	sleep_enable();
-	sei();
-	sleep_cpu();
-	sleep_disable();
-	cli();
-}
-
 void prepare_sleep() {
 	// disable ADC
 	ADCSRA = 0;  
@@ -56,6 +44,18 @@ void prepare_sleep() {
 	WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0);    // set WDIE, and 8 seconds delay
 	wdt_reset();  // pat the dog
 }
+
+void go_sleep () {
+	nrf24_powerDown();
+	prepare_sleep();
+	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+	sleep_enable();
+	sei();
+	sleep_cpu();
+	sleep_disable();
+	cli();
+}
+
 
 #define DHT_PIN(reg) BIT(C, 0, reg)
 
@@ -102,12 +102,12 @@ uint8_t Vbat = 0;
 uint8_t wakeupCnt __attribute__ ((section (".noinit")));
 
 int main (void) {
-/*	
+	
 	if (wakeupCnt++ < 3) {
 		go_sleep();
 	}
 	wakeupCnt = 0;
-*/
+
 	SETBIT(PORTB,PB5);
 	dht_t dht;
 	gpio_init();
@@ -164,10 +164,9 @@ int main (void) {
 		/* Retranmission count indicates the tranmission quality */
 		temp = nrf24_retransmissionCount();
 		//printf("> Retranmission count: %d\r\n",temp);
-		_delay_ms(100);
 		if (temp > 0) {
 			SETBIT(PORTB,PB5);
-			_delay_ms(3000);
+			_delay_ms(500);
 			CLRBIT(PORTB,PB5);
 		}
 		go_sleep();
