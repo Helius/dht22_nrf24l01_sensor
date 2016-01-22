@@ -1,7 +1,7 @@
 CC = avr-gcc
 MCU = atmega328
 #DEBUG = -g
-TARGET = cooler
+TARGET = main
 F_CPU = 16000000
 
 CCFLAGS = -DF_CPU=$(F_CPU) -mmcu=$(MCU) -Wall $(DEBUG) -I../ -std=gnu99 -Os -ffunction-sections -Wa,-adhlns=$(<:.c=.lst)
