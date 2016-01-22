@@ -7,7 +7,7 @@
 #include <avr/interrupt.h>
 #include "uart.h"
 #include "dht.h"
-#include "nrf24L01_plus/nrf24.h"
+#include <nrf24L01_plus/nrf24.h>
 
 #define DHTpin 3
 #define DHTpower 4
