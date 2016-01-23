@@ -32,7 +32,7 @@ void gpio_init() {
 
 	CLRBIT(PORTD, DHTpin);
 	
-	//SETBIT(DDRD,5);
+	SETBIT(DDRB,PB5); // led
 	
 	DIDR0 = 0xFF; // disable digital buffer on ADC channel
 }
@@ -78,8 +78,8 @@ void prepare_sleep() {
 	// allow changes, disable reset
 	WDTCSR = (1<<WDCE) | (1<<WDE);
 	// set interrupt mode and an interval 
-	//WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0);    // set WDIE, and 8 seconds delay
-	WDTCSR = (1<<WDIE) | (1<<WDP2) | (1<<WDP1);  // set WDIE, and 1 seconds delay for debug
+	WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0);    // set WDIE, and 8 seconds delay
+	//WDTCSR = (1<<WDIE) | (1<<WDP2) | (1<<WDP1);  // set WDIE, and 1 seconds delay for debug
 	wdt_reset();  // pat the dog
 }
 
