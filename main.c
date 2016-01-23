@@ -21,14 +21,14 @@
 
 
 void gpio_init() {
-		DDRB |= 1<<PB5;
-		DDRD |= 1<<DHTpower;
-		PORTD|= 1<<DHTpower;
-		//SETBIT(PORTD,DHTpin);
-		//CLRBIT(DDRD,DHTpin);
-		CLRBIT(PORTD,DHTpin);
-		SETBIT(DDRD,5);
-		DIDR0 = 0xFF; // disable digital buffer on ADC channel
+	DDRB |= 1<<PB5;
+	DDRD |= 1<<DHTpower;
+	PORTD|= 1<<DHTpower;
+	//SETBIT(PORTD,DHTpin);
+	//CLRBIT(DDRD,DHTpin);
+	CLRBIT(PORTD,DHTpin);
+	SETBIT(DDRD,5);
+	DIDR0 = 0xFF; // disable digital buffer on ADC channel
 }
 
 void adc_init() {
@@ -41,7 +41,8 @@ void adc_init() {
 }
 
 void adc_do_convertion () {
-	ADCSRA |= (1<<ADSC);
+	if (ADCSRA & (1<<ADEN))
+		ADCSRA |= (1<<ADSC);
 }
 
 uint8_t battery_level __attribute__ ((section (".noinit")));
@@ -52,6 +53,7 @@ void update_battery_level() {
 	}
 }
 
+// Now it consumes about 160 uA in sleep mode
 void prepare_sleep() {
 	DDRC = 0;
 	// disable digital buffer on ADC pin
@@ -137,9 +139,11 @@ int main (void) {
 	}
 	wakeupCnt = 0;
 
-	if (++battery_check_count > 10) {
+	if (battery_check_count == 0) {
 		adc_init();
-		battery_check_count = 0;
+		battery_check_count = 10;
+	} else {
+		battery_check_count--;
 	}
 	
 	SETBIT(PORTB,PB5);
@@ -166,11 +170,12 @@ int main (void) {
 	nrf24_tx_address(tx_address);
 	nrf24_rx_address(rx_address);    
 
-	while (1){
+	while (1) {
 		if(DHT_Read22(&dht) == DHTLIB_OK){
-			//printf("data: T:%f, H:%f\r\n", dht.temperature, dht.humidity);
+			//printf("dht read ok\r\n", dht._bits[0], dht._bits[1], dht._bits[2], dht._bits[3]);
 		} else {
-			//printf("-\r\n");
+			//printf("dht read fail, retry\r\n");
+			DHT_Read22(&dht);
 		}
 		
 		data_array[0] = 0x01;         // kind: DHT22 = 1
