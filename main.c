@@ -11,31 +11,37 @@
 
 #define DHTpin 3
 #define DHTpower 4
+#define NRF24_POWER 0
 
 #define SETBIT(reg,bit) (reg|=1<<bit)
 #define CLRBIT(reg,bit) (reg&=~(1<<bit))
 #define TSTBIT(reg,bit) (reg&(1<<bit))
 
+#define SET_LED SETBIT(PORTB,PB5) // led
+#define CLR_LED CLRBIT(PORTB,PB5) // led
 
 #define DEBUG_ENABLE 0
 
 
 void gpio_init() {
-	DDRB |= 1<<PB5;
-	DDRD |= 1<<DHTpower;
-	PORTD|= 1<<DHTpower;
-	//SETBIT(PORTD,DHTpin);
-	//CLRBIT(DDRD,DHTpin);
-	CLRBIT(PORTD,DHTpin);
-	SETBIT(DDRD,5);
+	//SETBIT(PORTB, NRF24_POWER);
+	//SETBIT(DDRB, NRF24_POWER);
+	
+	SETBIT(DDRD,  DHTpower);
+	SETBIT(PORTD, DHTpower);
+
+	CLRBIT(PORTD, DHTpin);
+	
+	//SETBIT(DDRD,5);
+	
 	DIDR0 = 0xFF; // disable digital buffer on ADC channel
 }
 
 void adc_init() {
 	CLRBIT(PRR,PRADC); // enable adc power
 	DIDR0 = 0; // enable digital buffer on ADC pin
-	PORTC = 0;
-	DDRC = 1 << 4;
+	CLRBIT(PORTC,4);
+	SETBIT(DDRC,4);
 	ADMUX = (1<<REFS1) | (1<<REFS0) | (1<<ADLAR) | 5; // use 5 channel 
 	ADCSRA = (1<<ADEN) | (0<<ADIE) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
 }
@@ -55,7 +61,9 @@ void update_battery_level() {
 
 // Now it consumes about 160 uA in sleep mode
 void prepare_sleep() {
+	// DDRB = 0;
 	DDRC = 0;
+	//DDRD = 0;
 	// disable digital buffer on ADC pin
 	DIDR0 = 0xFF;
 	// disable ADC
@@ -70,8 +78,8 @@ void prepare_sleep() {
 	// allow changes, disable reset
 	WDTCSR = (1<<WDCE) | (1<<WDE);
 	// set interrupt mode and an interval 
-	WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0);    // set WDIE, and 8 seconds delay
-	//WDTCSR = (1<<WDIE) | (1<<WDP2) | (1<<WDP1);  // set WDIE, and 1 seconds delay for debug
+	//WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0);    // set WDIE, and 8 seconds delay
+	WDTCSR = (1<<WDIE) | (1<<WDP2) | (1<<WDP1);  // set WDIE, and 1 seconds delay for debug
 	wdt_reset();  // pat the dog
 }
 
@@ -93,8 +101,8 @@ static inline int16_t dhtproc(dht_request_t req, uint16_t arg){
 	switch(req){
 		case DHT_READ_PIN:
 		{
-			CLRBIT(DDRD,3);
-			int val = bit_is_set(PIND,3);
+			CLRBIT(DDRD,DHTpin);
+			int val = bit_is_set(PIND,DHTpin);
 
 			return val;
 		}
@@ -146,9 +154,9 @@ int main (void) {
 		battery_check_count--;
 	}
 	
-	SETBIT(PORTB,PB5);
 	dht_t dht;
 	gpio_init();
+	SET_LED;
 
 #if DEBUG_ENABLE
 	// enable USART
@@ -204,19 +212,16 @@ int main (void) {
 		{
 			//printf("> Message is lost ...\r\n");
 		}
-		CLRBIT(PORTB,PB5);
+		CLR_LED;
 
 		/* Retranmission count indicates the tranmission quality */
 		radioLostCnt = nrf24_retransmissionCount();
 		//printf("> Retranmission count: %d\r\n",temp);
 		if (radioLostCnt > 0) {
-			//SETBIT(PORTB,PB5);
-			//_delay_ms(60);
-			CLRBIT(PORTB,PB5);
 			_delay_ms(80);
-			SETBIT(PORTB,PB5);
+			SET_LED;
 			_delay_ms(80);
-			CLRBIT(PORTB,PB5);
+			CLR_LED;
 		}
 		update_battery_level();
 		go_sleep();
