@@ -17,6 +17,8 @@
 #define TSTBIT(reg,bit) (reg&(1<<bit))
 
 
+#define DEBUG_ENABLE 0
+
 
 void gpio_init() {
 		DDRB |= 1<<PB5;
@@ -26,9 +28,34 @@ void gpio_init() {
 		//CLRBIT(DDRD,DHTpin);
 		CLRBIT(PORTD,DHTpin);
 		SETBIT(DDRD,5);
+		DIDR0 = 0xFF; // disable digital buffer on ADC channel
+}
+
+void adc_init() {
+	CLRBIT(PRR,PRADC); // enable adc power
+	DIDR0 = 0; // enable digital buffer on ADC pin
+	PORTC = 0;
+	DDRC = 1 << 4;
+	ADMUX = (1<<REFS1) | (1<<REFS0) | (1<<ADLAR) | 5; // use 5 channel 
+	ADCSRA = (1<<ADEN) | (0<<ADIE) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
+}
+
+void adc_do_convertion () {
+	ADCSRA |= (1<<ADSC);
+}
+
+uint8_t battery_level __attribute__ ((section (".noinit")));
+void update_battery_level() {
+	if (ADCSRA & (1<<ADEN)) {
+		while (!(ADCSRA & (1<<ADIF)));
+		battery_level = ADCH;
+	}
 }
 
 void prepare_sleep() {
+	DDRC = 0;
+	// disable digital buffer on ADC pin
+	DIDR0 = 0xFF;
 	// disable ADC
 	ADCSRA = 0;  
 	// turn off various modules
@@ -42,6 +69,7 @@ void prepare_sleep() {
 	WDTCSR = (1<<WDCE) | (1<<WDE);
 	// set interrupt mode and an interval 
 	WDTCSR = (1<<WDIE) | (1<<WDP3) | (1<<WDP0);    // set WDIE, and 8 seconds delay
+	//WDTCSR = (1<<WDIE) | (1<<WDP2) | (1<<WDP1);  // set WDIE, and 1 seconds delay for debug
 	wdt_reset();  // pat the dog
 }
 
@@ -94,28 +122,39 @@ static inline int16_t dhtproc(dht_request_t req, uint16_t arg){
 }
 
 uint8_t temp;
-uint8_t q = 0;
 uint8_t data_array[8];
 uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 uint8_t Vbat = 0;
+uint8_t battery_check_count __attribute__ ((section (".noinit")));
 uint8_t wakeupCnt __attribute__ ((section (".noinit")));
+uint8_t radioLostCnt __attribute__ ((section (".noinit")));
 
 int main (void) {
 	
-	if (wakeupCnt++ < 3) {
+	if (++wakeupCnt < 5) {
 		go_sleep();
 	}
 	wakeupCnt = 0;
 
+	if (++battery_check_count > 10) {
+		adc_init();
+		battery_check_count = 0;
+	}
+	
 	SETBIT(PORTB,PB5);
 	dht_t dht;
 	gpio_init();
+
+#if DEBUG_ENABLE
+	// enable USART
+	CLRBIT(PRR,PRUSART0);
 	stdout = &uart_stream;
 	stdin = &uart_stream;
 	uart_init();
+	printf("Hi, how are you %d?\n\r", wakeupCnt);
+#endif
 
-//	printf("Hi, how are you %d?\n\r", wakeupCnt);
 
 	DHT_Init(&dht, dhtproc);
 
@@ -127,9 +166,9 @@ int main (void) {
 	nrf24_tx_address(tx_address);
 	nrf24_rx_address(rx_address);    
 
-	while(1){
+	while (1){
 		if(DHT_Read22(&dht) == DHTLIB_OK){
-			printf("data: T:%f, H:%f\r\n", dht.temperature, dht.humidity);
+			//printf("data: T:%f, H:%f\r\n", dht.temperature, dht.humidity);
 		} else {
 			//printf("-\r\n");
 		}
@@ -140,9 +179,10 @@ int main (void) {
 		data_array[3] = dht._bits[1]; // humidiry_1
 		data_array[4] = dht._bits[2]; // tempr_0
 		data_array[5] = dht._bits[3]; // tempr_1
-		data_array[6] = Vbat;
-		data_array[7] = temp;
+		data_array[6] = battery_level;// напряжение батареек  (x 100мВ)
+		data_array[7] = radioLostCnt; // number of trying to send
 
+		adc_do_convertion();
 		/* Automatically goes to TX mode */
 		nrf24_send(data_array);
 
@@ -162,13 +202,18 @@ int main (void) {
 		CLRBIT(PORTB,PB5);
 
 		/* Retranmission count indicates the tranmission quality */
-		temp = nrf24_retransmissionCount();
+		radioLostCnt = nrf24_retransmissionCount();
 		//printf("> Retranmission count: %d\r\n",temp);
-		if (temp > 0) {
+		if (radioLostCnt > 0) {
+			//SETBIT(PORTB,PB5);
+			//_delay_ms(60);
+			CLRBIT(PORTB,PB5);
+			_delay_ms(80);
 			SETBIT(PORTB,PB5);
-			_delay_ms(500);
+			_delay_ms(80);
 			CLRBIT(PORTB,PB5);
 		}
+		update_battery_level();
 		go_sleep();
 	}
 	return 0;
