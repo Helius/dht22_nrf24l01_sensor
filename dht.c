@@ -27,7 +27,7 @@ static int DHT_read(dht_t *self)
 	cli();
 	
 	self->sproc(DHT_WRITE_PIN, LOW);
-	self->sproc(DHT_DELAY_MS, 5);// helius: change from 20
+	self->sproc(DHT_DELAY_MS, 10);// helius: change from 20
 	self->sproc(DHT_WRITE_PIN, HIGH);
 	self->sproc(DHT_DELAY_US, 50);
 
